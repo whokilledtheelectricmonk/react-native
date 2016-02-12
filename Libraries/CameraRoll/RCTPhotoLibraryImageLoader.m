@@ -30,7 +30,7 @@ RCT_EXPORT_MODULE()
 - (RCTImageLoaderCancellationBlock)loadImageForURL:(NSURL *)imageURL
                                               size:(CGSize)size
                                              scale:(CGFloat)scale
-                                        resizeMode:(UIViewContentMode)resizeMode
+                                        resizeMode:(RCTResizeMode)resizeMode
                                    progressHandler:(RCTImageLoaderProgressBlock)progressHandler
                                  completionHandler:(RCTImageLoaderCompletionBlock)completionHandler
 {
@@ -50,7 +50,7 @@ RCT_EXPORT_MODULE()
   PHImageRequestOptions *imageOptions = [PHImageRequestOptions new];
 
   if (progressHandler) {
-    imageOptions.progressHandler = ^(double progress, NSError *error, BOOL *stop, NSDictionary *info) {
+    imageOptions.progressHandler = ^(double progress, NSError *error, BOOL *stop, NSDictionary<NSString *, id> *info) {
       static const double multiplier = 1e6;
       progressHandler(progress * multiplier, multiplier);
     };
@@ -58,21 +58,20 @@ RCT_EXPORT_MODULE()
 
   // Note: PhotoKit defaults to a deliveryMode of PHImageRequestOptionsDeliveryModeOpportunistic
   // which means it may call back multiple times - we probably don't want that
+  imageOptions.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
 
   BOOL useMaximumSize = CGSizeEqualToSize(size, CGSizeZero);
   CGSize targetSize;
   if (useMaximumSize) {
     targetSize = PHImageManagerMaximumSize;
     imageOptions.resizeMode = PHImageRequestOptionsResizeModeNone;
-    imageOptions.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
   } else {
     targetSize = size;
     imageOptions.resizeMode = PHImageRequestOptionsResizeModeFast;
-    imageOptions.deliveryMode = PHImageRequestOptionsDeliveryModeFastFormat;
   }
 
   PHImageContentMode contentMode = PHImageContentModeAspectFill;
-  if (resizeMode == UIViewContentModeScaleAspectFit) {
+  if (resizeMode == RCTResizeModeContain) {
     contentMode = PHImageContentModeAspectFit;
   }
 
@@ -81,7 +80,7 @@ RCT_EXPORT_MODULE()
                                              targetSize:targetSize
                                             contentMode:contentMode
                                                 options:imageOptions
-                                          resultHandler:^(UIImage *result, NSDictionary *info) {
+                                          resultHandler:^(UIImage *result, NSDictionary<NSString *, id> *info) {
     if (result) {
       completionHandler(nil, result);
     } else {

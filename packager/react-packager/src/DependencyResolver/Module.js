@@ -8,14 +8,23 @@
  */
 'use strict';
 
+const crypto = require('crypto');
 const docblock = require('./DependencyGraph/docblock');
 const isAbsolutePath = require('absolute-path');
 const path = require('path');
-const replacePatterns = require('./replacePatterns');
+const extractRequires = require('./lib/extractRequires');
 
 class Module {
 
-  constructor(file, fastfs, moduleCache, cache) {
+  constructor({
+    file,
+    fastfs,
+    moduleCache,
+    cache,
+    extractor = extractRequires,
+    transformCode,
+    depGraphHelpers,
+  }) {
     if (!isAbsolutePath(file)) {
       throw new Error('Expected file to be absolute path but got ' + file);
     }
@@ -26,21 +35,34 @@ class Module {
     this._fastfs = fastfs;
     this._moduleCache = moduleCache;
     this._cache = cache;
+    this._extractor = extractor;
+    this._transformCode = transformCode;
+    this._depGraphHelpers = depGraphHelpers;
   }
 
   isHaste() {
-    return this._cache.get(this.path, 'haste', () =>
-      this._read().then(data => !!data.id)
+    return this._cache.get(
+      this.path,
+      'isHaste',
+      () => this._readDocBlock().then(({id}) => !!id)
     );
+  }
+
+  getCode(transformOptions) {
+    return this.read(transformOptions).then(({code}) => code);
+  }
+
+  getMap(transformOptions) {
+    return this.read(transformOptions).then(({map}) => map);
   }
 
   getName() {
     return this._cache.get(
       this.path,
       'name',
-      () => this._read().then(data => {
-        if (data.id) {
-          return data.id;
+      () => this._readDocBlock().then(({id}) => {
+        if (id) {
+          return id;
         }
 
         const p = this.getPackage();
@@ -66,46 +88,71 @@ class Module {
     return this._moduleCache.getPackageForModule(this);
   }
 
-  getDependencies() {
-    return this._cache.get(this.path, 'dependencies', () =>
-      this._read().then(data => data.dependencies)
-    );
+  getDependencies(transformOptions) {
+    return this.read(transformOptions).then(data => data.dependencies);
   }
 
   invalidate() {
     this._cache.invalidate(this.path);
   }
 
-  getAsyncDependencies() {
-    return this._read().then(data => data.asyncDependencies);
+  _parseDocBlock(docBlock) {
+    // Extract an id for the module if it's using @providesModule syntax
+    // and if it's NOT in node_modules (and not a whitelisted node_module).
+    // This handles the case where a project may have a dep that has @providesModule
+    // docblock comments, but doesn't want it to conflict with whitelisted @providesModule
+    // modules, such as react-haste, fbjs-haste, or react-native or with non-dependency,
+    // project-specific code that is using @providesModule.
+    const moduleDocBlock = docblock.parseAsObject(docBlock);
+    const provides = moduleDocBlock.providesModule || moduleDocBlock.provides;
+
+    const id = provides && !this._depGraphHelpers.isNodeModulesDir(this.path)
+        ? /^\S+/.exec(provides)[0]
+        : undefined;
+    return {id, moduleDocBlock};
   }
 
-  _read() {
-    if (!this._reading) {
-      this._reading = this._fastfs.readFile(this.path).then(content => {
-        const data = {};
-        const moduleDocBlock = docblock.parseAsObject(content);
-        if (moduleDocBlock.providesModule || moduleDocBlock.provides) {
-          data.id = /^(\S*)/.exec(
-            moduleDocBlock.providesModule || moduleDocBlock.provides
-          )[1];
-        }
-
-        // Ignore requires in generated code. An example of this is prebuilt
-        // files like the SourceMap library.
-        if ('extern' in moduleDocBlock) {
-          data.dependencies = [];
-        } else {
-          var dependencies = extractRequires(content);
-          data.dependencies = dependencies.sync;
-          data.asyncDependencies = dependencies.async;
-        }
-
-        return data;
-      });
+  _readDocBlock(contentPromise) {
+    if (!this._docBlock) {
+      if (!contentPromise) {
+        contentPromise = this._fastfs.readWhile(this.path, whileInDocBlock);
+      }
+      this._docBlock = contentPromise
+        .then(docBlock => this._parseDocBlock(docBlock));
     }
+    return this._docBlock;
+  }
 
-    return this._reading;
+  read(transformOptions) {
+    return this._cache.get(
+      this.path,
+      cacheKey('moduleData', transformOptions),
+      () => {
+        const fileContentPromise = this._fastfs.readFile(this.path);
+        return Promise.all([
+          fileContentPromise,
+          this._readDocBlock(fileContentPromise)
+        ]).then(([code, {id, moduleDocBlock}]) => {
+          // Ignore requires in JSON files or generated code. An example of this
+          // is prebuilt files like the SourceMap library.
+          if (this.isJSON() || 'extern' in moduleDocBlock) {
+            return {id, code, dependencies: []};
+          } else {
+            const transformCode = this._transformCode;
+            const codePromise = transformCode
+                ? transformCode(this, code, transformOptions)
+                : Promise.resolve({code});
+
+            return codePromise.then(({code, dependencies, map}) => {
+              if (!dependencies) {
+                dependencies = this._extractor(code).deps.sync;
+              }
+              return {id, code, dependencies, map};
+            });
+          }
+        })
+      }
+    );
   }
 
   hash() {
@@ -140,48 +187,53 @@ class Module {
   }
 }
 
-/**
- * Extract all required modules from a `code` string.
- */
-const blockCommentRe = /\/\*(.|\n)*?\*\//g;
-const lineCommentRe = /\/\/.+(\n|$)/g;
-function extractRequires(code /*: string*/) /*: Array<string>*/ {
-  var deps = {
-    sync: [],
-    async: [],
-  };
+function whileInDocBlock(chunk, i, result) {
+  // consume leading whitespace
+  if (!/\S/.test(result)) {
+    return true;
+  }
 
-  code
-    .replace(blockCommentRe, '')
-    .replace(lineCommentRe, '')
-    // Parse sync dependencies. See comment below for further detils.
-    .replace(replacePatterns.IMPORT_RE, (match, pre, quot, dep, post) => {
-      deps.sync.push(dep);
-      return match;
-    })
-    .replace(replacePatterns.EXPORT_RE, (match, pre, quot, dep, post) => {
-      deps.sync.push(dep);
-      return match;
-    })
-    // Parse the sync dependencies this module has. When the module is
-    // required, all it's sync dependencies will be loaded into memory.
-    // Sync dependencies can be defined either using `require` or the ES6
-    // `import` or `export` syntaxes:
-    //   var dep1 = require('dep1');
-    .replace(replacePatterns.REQUIRE_RE, (match, pre, quot, dep, post) => {
-      deps.sync.push(dep);
-    })
-    // Parse async dependencies this module has. As opposed to what happens
-    // with sync dependencies, when the module is required, it's async
-    // dependencies won't be loaded into memory. This is deferred till the
-    // code path gets to the import statement:
-    //   System.import('dep1')
-    .replace(replacePatterns.SYSTEM_IMPORT_RE, (match, pre, quot, dep, post) => {
-      deps.async.push([dep]);
-      return match;
+  // check for start of doc block
+  if (!/^\s*\/(\*{2}|\*?$)/.test(result)) {
+    return false;
+  }
+
+  // check for end of doc block
+  return !/\*\//.test(result);
+}
+
+// use weak map to speed up hash creation of known objects
+const knownHashes = new WeakMap();
+function stableObjectHash(object) {
+  let digest = knownHashes.get(object);
+
+  if (!digest) {
+    const hash = crypto.createHash('md5');
+    stableObjectHash.addTo(object, hash);
+    digest = hash.digest('base64');
+    knownHashes.set(object, digest);
+  }
+
+  return digest;
+}
+stableObjectHash.addTo = function addTo(value, hash) {
+  if (value === null || typeof value !== 'object') {
+    hash.update(JSON.stringify(value));
+  } else {
+    Object.keys(value).sort().forEach(key => {
+      const valueForKey = value[key];
+      if (valueForKey !== undefined) {
+        hash.update(key);
+        addTo(valueForKey, hash);
+      }
     });
+  }
+};
 
-  return deps;
+function cacheKey(field, transformOptions) {
+  return transformOptions !== undefined
+      ? stableObjectHash(transformOptions) + '\0' + field
+      : field;
 }
 
 module.exports = Module;

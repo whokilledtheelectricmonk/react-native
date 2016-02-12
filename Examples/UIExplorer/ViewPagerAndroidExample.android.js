@@ -25,6 +25,8 @@ var {
   ViewPagerAndroid,
 } = React;
 
+import type { ViewPagerScrollState } from 'ViewPagerAndroid';
+
 var PAGES = 5;
 var BGCOLOR = ['#fdc08e', '#fff6b9', '#99d1b7', '#dde5fe', '#f79273'];
 var IMAGE_URIS = [
@@ -96,23 +98,43 @@ var ViewPagerAndroidExample = React.createClass({
     description: 'Container that allows to flip left and right between child views.'
   },
   getInitialState: function() {
-    return {page: 0, progress: {position: 0, offset: 0}};
+    return {
+      page: 0,
+      animationsAreEnabled: true,
+      progress: {
+        position: 0,
+        offset: 0,
+      },
+    };
   },
+
   onPageSelected: function(e) {
     this.setState({page: e.nativeEvent.position});
   },
+
   onPageScroll: function(e) {
     this.setState({progress: e.nativeEvent});
   },
+
+  onPageScrollStateChanged: function(state : ViewPagerScrollState) {
+    this.setState({scrollState: state});
+  },
+
   move: function(delta) {
     var page = this.state.page + delta;
-    this.viewPager && this.viewPager.setPage(page);
-    this.setState({page});
+    this.go(page);
   },
+
   go: function(page) {
-    this.viewPager && this.viewPager.setPage(page);
+    if (this.state.animationsAreEnabled) {
+      this.viewPager.setPage(page);
+    } else {
+      this.viewPager.setPageWithoutAnimation(page);
+    }
+
     this.setState({page});
   },
+
   render: function() {
     var pages = [];
     for (var i = 0; i < PAGES; i++) {
@@ -131,7 +153,7 @@ var ViewPagerAndroidExample = React.createClass({
        </View>
       );
     }
-    var page = this.state.page;
+    var { page, animationsAreEnabled } = this.state;
     return (
       <View style={styles.container}>
         <ViewPagerAndroid
@@ -139,9 +161,24 @@ var ViewPagerAndroidExample = React.createClass({
           initialPage={0}
           onPageScroll={this.onPageScroll}
           onPageSelected={this.onPageSelected}
+          onPageScrollStateChanged={this.onPageScrollStateChanged}
           ref={viewPager => { this.viewPager = viewPager; }}>
           {pages}
         </ViewPagerAndroid>
+        <View style={styles.buttons}>
+          { animationsAreEnabled ?
+            <Button
+              text="Turn off animations"
+              enabled={true}
+              onPress={() => this.setState({animationsAreEnabled: false})}
+            /> :
+            <Button
+              text="Turn animations back on"
+              enabled={true}
+              onPress={() => this.setState({animationsAreEnabled: true})}
+            /> }
+          <Text style={styles.scrollStateText}>ScrollState[ {this.state.scrollState} ]</Text>
+        </View>
         <View style={styles.buttons}>
           <Button text="Start" enabled={page > 0} onPress={() => this.go(0)}/>
           <Button text="Prev" enabled={page > 0} onPress={() => this.move(-1)}/>
@@ -177,6 +214,9 @@ var styles = StyleSheet.create({
   },
   buttonText: {
     color: 'white',
+  },
+  scrollStateText: {
+    color: '#99d1b7',
   },
   container: {
     flex: 1,

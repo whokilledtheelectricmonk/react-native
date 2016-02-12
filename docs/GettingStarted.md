@@ -9,7 +9,7 @@ next: android-setup
 
 ## Requirements
 
-1. OS X - Only OS X is currently supported
+1. OS X - This guide assumes OS X which is needed for iOS development.
 2. [Homebrew](http://brew.sh/) is the recommended way to install Watchman and Flow.
 3. Install [Node.js](https://nodejs.org/) 4.0 or newer.
   - Install **nvm** with [its setup instructions here](https://github.com/creationix/nvm#installation). Then run `nvm install node && nvm alias default node`, which installs the latest version of Node.js and sets up your terminal so you can run it by typing `node`. With nvm you can install multiple versions of Node.js and easily switch between them.
@@ -21,11 +21,13 @@ We recommend periodically running `brew update && brew upgrade` to keep your pro
 
 ## iOS Setup
 
-[Xcode](https://developer.apple.com/xcode/downloads/) 6.3 or higher is required. It can be installed from the App Store.
+[Xcode](https://developer.apple.com/xcode/downloads/) 7.0 or higher is required. It can be installed from the App Store.
 
 ## Android Setup
 
 To write React Native apps for Android, you will need to install the Android SDK (and an Android emulator if you want to work on your app without having to use a physical device). See [Android setup guide](android-setup.html) for instructions on how to set up your Android environment.
+
+_NOTE:_ There is experimental [Windows and Linux support](docs/linux-windows-support.html) for Android development.
 
 ## Quick start
 
@@ -39,6 +41,8 @@ To write React Native apps for Android, you will need to install the Android SDK
 - Open `index.ios.js` in your text editor of choice and edit some lines.
 - Hit ⌘-R in your iOS simulator to reload the app and see your change!
 
+_Note: If you are using an iOS device, see the [Running on iOS Device page](docs/running-on-device-ios.html#content)._
+
 **To run the Android app:**
 
 - `$ cd AwesomeProject`
@@ -47,11 +51,11 @@ To write React Native apps for Android, you will need to install the Android SDK
 - Press the menu button (F2 by default, or ⌘-M in Genymotion) and select *Reload JS* to see your change!
 - Run `adb logcat *:S ReactNative:V ReactNativeJS:V` in a terminal to see your app's logs
 
-_Note: If you are using a device, see the [Running on Device page](http://facebook.github.io/react-native/docs/running-on-device-android.html#content)._
+_Note: If you are using an Android device, see the [Running on Android Device page](docs/running-on-device-android.html#content)._
 
 Congratulations! You've successfully run and modified your first React Native app.
 
-_If you run into any issues getting started, see the [troubleshooting page](/react-native/docs/troubleshooting.html#content)._
+_If you run into any issues getting started, see the [troubleshooting page](docs/troubleshooting.html#content)._
 
 ## Adding Android to an existing React Native project
 

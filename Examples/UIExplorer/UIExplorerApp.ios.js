@@ -22,6 +22,10 @@ var {
   AppRegistry,
   NavigatorIOS,
   StyleSheet,
+  Text,
+  TouchableHighlight,
+  View,
+  StatusBar,
 } = React;
 
 var UIExplorerApp = React.createClass({
@@ -45,20 +49,23 @@ var UIExplorerApp = React.createClass({
     }
 
     return (
-      <NavigatorIOS
-        style={styles.container}
-        initialRoute={{
-          title: 'UIExplorer',
-          component: UIExplorerList,
-          passProps: {
-            onExternalExampleRequested: (example) => {
-              this.setState({ openExternalExample: example, });
-            },
-          }
-        }}
-        itemWrapperStyle={styles.itemWrapper}
-        tintColor="#008888"
-      />
+      <View style={{flex: 1}}>
+        <StatusBar barStyle="default" />
+        <NavigatorIOS
+          style={styles.container}
+          initialRoute={{
+            title: 'UIExplorer',
+            component: UIExplorerList,
+            passProps: {
+              onExternalExampleRequested: (example) => {
+                this.setState({ openExternalExample: example, });
+              },
+            }
+          }}
+          itemWrapperStyle={styles.itemWrapper}
+          tintColor="#008888"
+        />
+      </View>
     );
   }
 });
@@ -70,8 +77,76 @@ var styles = StyleSheet.create({
   itemWrapper: {
     backgroundColor: '#eaeaea',
   },
+  bigContainer: {
+    flex: 1,
+    height: 60,
+    backgroundColor: 'gray',
+  },
+  smallContainer: {
+    flex: 1,
+    height: 40,
+    backgroundColor: 'gray',
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whiteText: {
+    color: 'white',
+  }
 });
 
+var SetPropertiesExampleApp = React.createClass({
+
+  render: function() {
+    var wrapperStyle = {
+      backgroundColor: this.props.color,
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center'
+    };
+
+    return (
+      <View style={wrapperStyle}>
+        <Text>
+          Embedded React Native view
+        </Text>
+      </View>
+    );
+  },
+});
+
+var RootViewSizeFlexibilityExampleApp = React.createClass({
+
+  getInitialState: function () {
+    return { toggled: false };
+  },
+
+  _onPressButton: function() {
+    this.setState({ toggled: !this.state.toggled });
+  },
+
+  render: function() {
+    var viewStyle = this.state.toggled ? styles.bigContainer : styles.smallContainer;
+
+    return (
+      <TouchableHighlight onPress={this._onPressButton}>
+        <View style={viewStyle}>
+          <View style={styles.center}>
+            <Text style={styles.whiteText}>
+              React Native Button
+            </Text>
+          </View>
+        </View>
+      </TouchableHighlight>
+    );
+  },
+});
+
+AppRegistry.registerComponent('SetPropertiesExampleApp', () => SetPropertiesExampleApp);
+AppRegistry.registerComponent('RootViewSizeFlexibilityExampleApp', () => RootViewSizeFlexibilityExampleApp);
 AppRegistry.registerComponent('UIExplorerApp', () => UIExplorerApp);
+UIExplorerList.registerComponents();
 
 module.exports = UIExplorerApp;

@@ -26,15 +26,24 @@ type GeoOptions = {
   timeout: number;
   maximumAge: number;
   enableHighAccuracy: bool;
+  distanceFilter: number;
 }
 
 /**
+ * The Geolocation API follows the web spec:
+ * https://developer.mozilla.org/en-US/docs/Web/API/Geolocation
+ *
+ * ### iOS
  * You need to include the `NSLocationWhenInUseUsageDescription` key
  * in Info.plist to enable geolocation. Geolocation is enabled by default
  * when you create a project with `react-native init`.
  *
- * Geolocation follows the MDN specification:
- * https://developer.mozilla.org/en-US/docs/Web/API/Geolocation
+ * ### Android
+ * To request access to location, you need to add the following line to your
+ * app's `AndroidManifest.xml`:
+ *
+ * `<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />`
+ *
  */
 var Geolocation = {
 
@@ -60,7 +69,7 @@ var Geolocation = {
 
   /*
    * Invokes the success callback whenever the location changes.  Supported
-   * options: timeout (ms), maximumAge (ms), enableHighAccuracy (bool)
+   * options: timeout (ms), maximumAge (ms), enableHighAccuracy (bool), distanceFilter(m)
    */
   watchPosition: function(success: Function, error?: Function, options?: GeoOptions): number {
     if (!updatesEnabled) {
